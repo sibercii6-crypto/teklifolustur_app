@@ -6,7 +6,6 @@ if (!isset($_SESSION['user_id'])) { die("Yetkisiz erişim!"); }
 $offer_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($offer_id <= 0) { die("Geçersiz Teklif ID'si"); }
 
-// IDOR zafiyeti için user_id kontrolü yok, bu CTF'in bir parçası
 $offer_stmt = mysqli_prepare($conn, "SELECT o.*, u.email FROM offers o JOIN users u ON o.user_id = u.id WHERE o.id = ?");
 mysqli_stmt_bind_param($offer_stmt, "i", $offer_id);
 mysqli_stmt_execute($offer_stmt);
