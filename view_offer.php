@@ -1,33 +1,58 @@
 <?php
 include "db.php";
 
-if (!isset($_SESSION['user_id'])) { die("Yetkisiz erişim!"); }
+// 1️⃣ Authentication kontrolü
+if (!isset($_SESSION['user_id'])) {
+    http_response_code(401);
+    die("Yetkisiz erişim!");
+}
 
-$offer_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-if ($offer_id <= 0) { die("Geçersiz Teklif ID'si"); }
+$user_id = (int) $_SESSION['user_id'];
 
-$offer_stmt = mysqli_prepare($conn, "SELECT o.*, u.email FROM offers o JOIN users u ON o.user_id = u.id WHERE o.id = ?");
+// 2️⃣ Güvenli offer_id okuma
+$offer_id = filter_input(INPUT_GET, 'id', FILTER_VALIDATE_INT);
+if (!$offer_id) {
+    http_response_code(400);
+    die("Geçersiz Teklif ID'si");
+}
+
+// 3️⃣ Teklif çek (SADECE ID ile)
+$offer_stmt = mysqli_prepare(
+    $conn,
+    "SELECT o.*, u.email 
+     FROM offers o 
+     JOIN users u ON o.user_id = u.id 
+     WHERE o.id = ?"
+);
 mysqli_stmt_bind_param($offer_stmt, "i", $offer_id);
 mysqli_stmt_execute($offer_stmt);
 $offer_result = mysqli_stmt_get_result($offer_stmt);
 
-$offer = null;
-if (mysqli_num_rows($offer_result) == 1) {
-    $offer = mysqli_fetch_assoc($offer_result);
-} else {
-    die("Teklif bulunamadı.");
+$offer = mysqli_fetch_assoc($offer_result);
+mysqli_stmt_close($offer_stmt);
+
+// 4️⃣ Authorization kontrolü (IDOR FIX ASIL NOKTA)
+if (!$offer || (int)$offer['user_id'] !== $user_id) {
+    http_response_code(403);
+    die("Bu teklife erişim yetkiniz yok.");
 }
 
-// Teklife ait ürünleri çek
-$items_stmt = mysqli_prepare($conn, "SELECT * FROM offer_items WHERE offer_id = ?");
+// 5️⃣ Teklife ait ürünleri çek (ARTIK GÜVENLİ)
+$items_stmt = mysqli_prepare(
+    $conn,
+    "SELECT * FROM offer_items WHERE offer_id = ?"
+);
 mysqli_stmt_bind_param($items_stmt, "i", $offer_id);
 mysqli_stmt_execute($items_stmt);
 $items_result = mysqli_stmt_get_result($items_stmt);
+
 $items = [];
 while ($row = mysqli_fetch_assoc($items_result)) {
     $items[] = $row;
 }
+mysqli_stmt_close($items_stmt);
 ?>
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
